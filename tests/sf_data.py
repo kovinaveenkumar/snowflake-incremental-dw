@@ -45,3 +45,22 @@ def run_procs(cur, names=LOAD_ORDER) -> dict:
     for name in names:
         out[name] = json.loads(cur.execute(f"CALL CORE.{name}()").fetchone()[0])
     return out
+
+
+def controls(cur, d: date, trade_rows: list[dict] | None = None, account_rows: int | None = None,
+             notional_adjust: Decimal = Decimal("0")) -> None:
+    """Sender control file for day d, computed from the trade rows (optionally wrong by notional_adjust)."""
+    rows = []
+    if account_rows is not None:
+        rows.append({"file_name": f"accounts_{d:%Y%m%d}.csv", "file_date": d.isoformat(), "row_count": str(account_rows),
+                     "total_quantity": None, "total_notional": None})
+    if trade_rows is not None:
+        notional = sum(Decimal(t["notional"]) for t in trade_rows) + notional_adjust
+        rows.append({"file_name": f"trades_{d:%Y%m%d}.csv", "file_date": d.isoformat(), "row_count": str(len(trade_rows)),
+                     "total_quantity": str(sum(int(t["quantity"]) for t in trade_rows)), "total_notional": f"{notional:.2f}"})
+    insert(cur, "RAW.CONTROL_TOTALS", f"control/control_{d:%Y%m%d}.csv.gz", rows)
+
+
+def run_dq(cur) -> dict:
+    """Call the DQ procedure; raises snowflake.connector.errors.ProgrammingError when a check FAILS."""
+    return json.loads(cur.execute("CALL AUDIT.SP_RUN_DQ_CHECKS()").fetchone()[0])

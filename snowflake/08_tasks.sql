@@ -4,7 +4,7 @@
 --     -> CORE.TASK_LOAD_DIM_ACCOUNT     (root itself loads DIM_SECURITY)
 --       -> CORE.TASK_LOAD_FACT_TRADE
 --         -> CORE.TASK_LOAD_FACT_DAILY_POSITION
---         (Step 9 adds the data-quality task here, in parallel with the position snapshot)
+--           -> CORE.TASK_RUN_DQ_CHECKS        (created in 09_data_quality.sql; re-run 09 after this file)
 --
 -- Cost: the WHEN condition is checked by Snowflake's cloud services layer without starting the
 -- warehouse; when no new file has landed, the run is SKIPPED and DW_WH stays suspended. The
@@ -30,6 +30,7 @@ CREATE OR REPLACE TASK CORE.TASK_ROOT
   WHEN SYSTEM$STREAM_HAS_DATA('RAW.STRM_SECURITIES')
     OR SYSTEM$STREAM_HAS_DATA('RAW.STRM_ACCOUNTS')
     OR SYSTEM$STREAM_HAS_DATA('RAW.STRM_TRADES')
+    OR SYSTEM$STREAM_HAS_DATA('RAW.STRM_CONTROL_TOTALS')
 AS
   CALL CORE.SP_LOAD_DIM_SECURITY();
 

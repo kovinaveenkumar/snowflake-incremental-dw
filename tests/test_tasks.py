@@ -10,31 +10,32 @@ from pathlib import Path
 
 import pytest
 
-from tests.sf_data import LOAD_ORDER, accounts, run_procs, securities, trade, trades
+from tests.sf_data import LOAD_ORDER, accounts, run_dq, run_procs, securities, trade, trades
 
 SQL_FILES = ["03_raw_tables.sql", "04_streams.sql", "05_dim_account_scd2.sql", "06_fact_trade.sql",
-             "07_fact_daily_position.sql", "08_tasks.sql"]
-TASKS_SQL = (Path(__file__).resolve().parents[1] / "snowflake" / "08_tasks.sql").read_text()
+             "07_fact_daily_position.sql", "08_tasks.sql", "09_data_quality.sql"]
+SQL_DIR = Path(__file__).resolve().parents[1] / "snowflake"
+TASKS_SQL = (SQL_DIR / "08_tasks.sql").read_text() + (SQL_DIR / "09_data_quality.sql").read_text()
 D1 = date(2026, 9, 1)
 
 
 def _tasks() -> dict[str, dict]:
     tasks = {}
-    for name, body in re.findall(r"CREATE OR REPLACE TASK (CORE\.\w+)(.*?CALL CORE\.\w+\(\));", TASKS_SQL, flags=re.S):
+    for name, body in re.findall(r"CREATE OR REPLACE TASK (CORE\.\w+)(.*?CALL \w+\.\w+\(\));", TASKS_SQL, flags=re.S):
         after = re.search(r"AFTER (CORE\.\w+)", body)
         tasks[name] = {"after": after.group(1) if after else None,
-                       "call": re.search(r"CALL CORE\.(\w+)\(\)", body).group(1), "body": body}
+                       "call": re.search(r"CALL (\w+)\.(\w+)\(\)", body).group(2), "body": body}
     return tasks
 
 
-def test_graph_runs_procedures_in_load_order():
+def test_graph_runs_procedures_in_load_order_then_dq():
     tasks = _tasks()
     (root,) = [n for n, t in tasks.items() if t["after"] is None]
     chain, current = [], root
     while current:
         chain.append(tasks[current]["call"])
         current = next((n for n, t in tasks.items() if t["after"] == current), None)
-    assert tuple(chain) == LOAD_ORDER
+    assert tuple(chain) == LOAD_ORDER + ("SP_RUN_DQ_CHECKS",)
 
 
 def test_root_is_scheduled_and_gated_on_raw_streams():
@@ -42,7 +43,7 @@ def test_root_is_scheduled_and_gated_on_raw_streams():
     assert "SCHEDULE = '5 MINUTE'" in root
     assert "ALLOW_OVERLAPPING_EXECUTION = FALSE" in root
     gated = set(re.findall(r"SYSTEM\$STREAM_HAS_DATA\('(RAW\.\w+)'\)", root))
-    assert gated == {"RAW.STRM_SECURITIES", "RAW.STRM_ACCOUNTS", "RAW.STRM_TRADES"}
+    assert gated == {"RAW.STRM_SECURITIES", "RAW.STRM_ACCOUNTS", "RAW.STRM_TRADES", "RAW.STRM_CONTROL_TOTALS"}
 
 
 @pytest.mark.snowflake
@@ -51,6 +52,7 @@ def test_graph_loads_every_layer(sf_test_db):
 
     cur = sf_test_db.cursor()
     run_procs(cur)  # first read of every stream (empty SHOW_INITIAL_ROWS snapshot)
+    run_dq(cur)
 
     securities(cur, [{"security_id": "S1"}])
     accounts(cur, D1, [{"account_id": "A1"}])
@@ -61,7 +63,8 @@ def test_graph_loads_every_layer(sf_test_db):
     assert run["state"] == "SUCCEEDED", run
     states = {t["name"]: t["state"] for t in task_runs(cur, run["run_id"])}
     assert states == {"TASK_ROOT": "SUCCEEDED", "TASK_LOAD_DIM_ACCOUNT": "SUCCEEDED",
-                      "TASK_LOAD_FACT_TRADE": "SUCCEEDED", "TASK_LOAD_FACT_DAILY_POSITION": "SUCCEEDED"}
+                      "TASK_LOAD_FACT_TRADE": "SUCCEEDED", "TASK_LOAD_FACT_DAILY_POSITION": "SUCCEEDED",
+                      "TASK_RUN_DQ_CHECKS": "SUCCEEDED"}
 
     counts = cur.execute("""SELECT (SELECT COUNT(*) FROM CORE.DIM_SECURITY), (SELECT COUNT(*) FROM CORE.DIM_ACCOUNT),
                                    (SELECT COUNT(*) FROM CORE.FACT_TRADE), (SELECT COUNT(*) FROM AUDIT.REJECTED_ROWS),
