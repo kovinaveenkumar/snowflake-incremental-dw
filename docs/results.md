@@ -183,3 +183,33 @@ Engineering note: Snowpark local testing mode does not implement `round`, so rou
 | Trades that would be flagged at 0.5 % / 1 % / 2 % | 238 / 0 / 0 |
 
 A 5 % threshold has about 7x headroom over normal price noise in this data (the generator spreads trade prices ±0.5 % around a daily price), so a real fat-finger error stands out. The check runs from the client; it is not in the Task graph.
+
+## Full 30-day load through the schedule (2026-10-14)
+
+**Action:** `python -m generator.upload_to_stage --date 2026-09-03 --through 2026-10-12` uploaded days 3-30 in one go: 84 files PUT and 84 Snowpipe `insertFiles` SUCCESS in 81 s, from 14:33:21 to 14:34:42 Snowflake time (PDT). No procedure was called by hand. This is also a real catch-up test: 28 days arrived together.
+
+**Scheduled run:** the next tick, at 14:37:42, loaded all 28 days in one graph run, SUCCEEDED by 14:38:27 (45 s). Snowpipe had finished every file before the tick (pending files 0).
+
+| Task | Time | Result |
+|---|---|---|
+| TASK_ROOT (DIM_SECURITY) | 4.3 s | 0 new securities |
+| TASK_LOAD_DIM_ACCOUNT | 10.0 s | 384 rows read: 84 unchanged, 194 versions closed, 300 inserted. 28 days of changes chained in one run; up to 4 versions per account |
+| TASK_LOAD_FACT_TRADE | 11.6 s | 55,971 read, 55,808 inserted, 163 rejected |
+| TASK_LOAD_FACT_DAILY_POSITION | 6.5 s | rebuilt from 2026-09-03, 642,705 rows inserted |
+| TASK_RUN_DQ_CHECKS | 8.1 s | 56 control files registered: 230 PASS, 0 FAIL, 0 WARN, 0 PENDING |
+
+**Final state compared with an independent expectation** (computed in Python from the generated files only, including a replay of the SCD2 rules over the 30 account files). Every item matches:
+
+| Item | Expected from files | Warehouse |
+|---|---|---|
+| Account rows sent | 893 | 893 |
+| DIM_ACCOUNT versions / current / closed | 806 / 538 / 268 | 806 / 538 / 268 |
+| Unchanged re-sends ignored | 87 | 87 |
+| Trade rows in RAW | 60,031 | 60,031 |
+| FACT_TRADE rows | 59,853 | 59,853 |
+| Rejected trades (by trade_id and reason, the same 178 as the manifest) | 41 missing account, 46 negative qty, 45 unknown security, 46 duplicate | identical |
+| Position snapshot days | 30 | 30 (648,618 rows, 2026-09-01 to 2026-10-12) |
+
+**Reconciliation:** all 60 control files (30 accounts + 30 trades) are closed as PASS. Across the 30 trade files, sender rows 60,031 = RAW 60,031 = FACT 59,853 + rejected 178, and notional 7,316,162,275.22 = loaded + rejected, with 0 files differing on rows, quantity or notional. The reject rate per file was 0.20 % to 0.39 %. All 6 global checks PASS.
+
+**Cost so far:** 1.37 credits used on DW_WH (resource monitor), out of the 20-credit cap.

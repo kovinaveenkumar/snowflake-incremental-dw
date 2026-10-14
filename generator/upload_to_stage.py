@@ -6,11 +6,13 @@ With --wait, poll COPY_HISTORY until every announced file shows a final load sta
 Usage:
   python -m generator.upload_to_stage --date 2026-09-01 --wait
   python -m generator.upload_to_stage --date 2026-09-01 --reference --wait   # also the security master
+  python -m generator.upload_to_stage --date 2026-09-03 --through 2026-10-12  # every generated day in range
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from dataclasses import dataclass
 from datetime import date
@@ -52,6 +54,13 @@ def files_for(day: date, data_dir: Path, reference: bool) -> list[tuple[Feed, Pa
     if missing:
         raise SystemExit(f"Missing files (run generator/generate_files.py first): {missing}")
     return plan
+
+
+def days_in_range(data_dir: Path, first: date, last: date) -> list[date]:
+    """Generated business days between first and last (inclusive), from the generator's manifest."""
+    manifest = json.loads((data_dir / "manifest.json").read_text())
+    days = [date.fromisoformat(d["file_date"]) for d in manifest["days"]]
+    return [d for d in days if first <= d <= last] or [first]
 
 
 def put_files(cur, plan: list[tuple[Feed, Path]]) -> None:
@@ -109,12 +118,15 @@ def wait_for_loads(cur, plan: list[tuple[Feed, Path]], started: float, timeout_s
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--date", type=date.fromisoformat, required=True)
+    parser.add_argument("--through", type=date.fromisoformat, help="last date of a range (days from manifest.json)")
     parser.add_argument("--data-dir", type=Path, default=ROOT / "data" / "raw")
     parser.add_argument("--reference", action="store_true", help="also upload securities.csv")
     parser.add_argument("--wait", action="store_true", help="poll COPY_HISTORY until the files are loaded")
     args = parser.parse_args()
 
-    plan = files_for(args.date, args.data_dir, args.reference)
+    plan = []
+    for i, day in enumerate(days_in_range(args.data_dir, args.date, args.through or args.date)):
+        plan += files_for(day, args.data_dir, args.reference and i == 0)
     started = time.time()
     with snowflake_connect(database=env("SNOWFLAKE_DATABASE")) as conn:
         cur = conn.cursor()
