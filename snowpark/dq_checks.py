@@ -67,7 +67,8 @@ def run(session: Session, threshold_pct: float = 5.0, min_peers: int = 2) -> dic
 
     status = "PASS" if flagged == 0 else "WARN"
     details = (f"{flagged} of {evaluated} trades deviate > {threshold_pct}% from same-day peer VWAP "
-               f"(min {min_peers} peers); max deviation {max_deviation}%")
+               f"(min {min_peers} peers); max deviation "
+               f"{'n/a' if max_deviation is None else f'{float(max_deviation):.4f}'}%")
     session.sql(
         "INSERT INTO AUDIT.DQ_RESULTS (run_id, check_name, scope, expected, actual, status, details) "
         "VALUES (?, ?, 'GLOBAL', 0, ?, ?, ?)",

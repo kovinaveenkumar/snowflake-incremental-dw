@@ -165,3 +165,21 @@ The DQ tests cover exact reconciliation with a reject-rate WARN, a sender contro
 | accounts_20260902.csv | 9 rows | 9 | n/a | PASS |
 
 All 6 global checks passed on both runs: one current version per account, contiguous ranges, unique trade_id, no orphans, account version in force at trade date, positions equal to the running sum of trades. AUDIT.CONTROL_REGISTER shows all 4 files closed as PASS.
+
+## Step 10: Snowpark data-quality check (2026-10-14)
+
+`snowpark/dq_checks.py` flags price outliers ("fat-finger" trades) with the Snowpark DataFrame API. Each trade's price is compared with the leave-one-out VWAP of the other trades in the same security on the same day, and trades more than 5 % off are flagged (minimum 2 peers). The DataFrame code is pushed down to Snowflake as SQL.
+
+**Tests:** `tests/test_snowpark_dq.py` gave **4 passed**: 3 offline in Snowpark local testing mode, plus 1 in `BROKER_DW_TEST` (69.5 s).
+Engineering note: Snowpark local testing mode does not implement `round`, so rounding is applied by the `NUMBER(38,4)` output column.
+
+**BROKER_DW:** created `AUDIT.PRICE_OUTLIERS` and ran `python -m snowpark.dq_checks` (5.8 s end to end):
+
+| Metric | Value |
+|---|---|
+| Trades evaluated (all had at least 2 same-day peers) | 4,045 of 4,045 |
+| Flagged at 5 % | 0 → DQ_RESULTS `SNOWPARK_PRICE_OUTLIERS` = PASS |
+| Deviation from peer VWAP: max / p99 / mean | 0.6829 % / 0.5774 % / 0.2592 % |
+| Trades that would be flagged at 0.5 % / 1 % / 2 % | 238 / 0 / 0 |
+
+A 5 % threshold has about 7x headroom over normal price noise in this data (the generator spreads trade prices ±0.5 % around a daily price), so a real fat-finger error stands out. The check runs from the client; it is not in the Task graph.
