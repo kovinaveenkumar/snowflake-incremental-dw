@@ -4,7 +4,9 @@
 --
 -- APPEND_ONLY: Snowpipe only ever inserts into RAW, so insert-only streams are enough and cheaper.
 -- SHOW_INITIAL_ROWS: day 1 was loaded before these streams existed; without this flag those rows
---   would never be seen downstream. The first consumer gets them, later reads see only new rows.
+--   would never be seen downstream. The first consuming read returns ONLY that initial snapshot
+--   (rows present when the stream was created); rows inserted after creation arrive on the next
+--   read. Nothing is lost, it is one run later (verified in tests/test_scd2_logic.py, run 0).
 -- One stream per consumer: a stream has a single offset, so each table that reads RAW gets its own.
 -- Staleness: a stream must be consumed within the table's retention plus
 --   MAX_DATA_EXTENSION_TIME_IN_DAYS (default 14 days); the Task tree in Step 8 runs far more often.

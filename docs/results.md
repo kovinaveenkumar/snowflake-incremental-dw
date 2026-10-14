@@ -67,3 +67,24 @@ Created 4 APPEND_ONLY streams with SHOW_INITIAL_ROWS = TRUE (`04_streams.sql`). 
 | RAW.STRM_CONTROL_TOTALS | 2 | 2 | 2 | 0 | TRUE |
 
 The day 1 rows loaded before the streams existed are all visible, because of SHOW_INITIAL_ROWS. A second SELECT on STRM_TRADES still returned 2,068, which confirms that reading does not advance the offset. All streams are `stale = false`, and stale_after is 2026-10-28 (14 days out) unless they are consumed earlier.
+
+## Step 5: SCD Type 2 account dimension (2026-10-14)
+
+**SCD2 tests** (`RUN_SNOWFLAKE_TESTS=1 pytest tests/test_scd2_logic.py`, in a temporary transient `BROKER_DW_TEST`, dropped afterwards): **8 passed** in 47 s.
+They cover: new, changed, unchanged, rejected (missing id, invalid status), a multi-day catch-up batch chained in date order, out-of-order rows rejected, identical replay ignored, an empty run, and the invariants (exactly one current row per account, contiguous non-overlapping ranges, unique surrogate keys).
+
+Engineering note: with `SHOW_INITIAL_ROWS = TRUE`, the first consuming read returns only the rows present when the stream was created; rows inserted after creation arrive on the next read. The tests cover this (run 0) and `04_streams.sql` documents it. In BROKER_DW, day 1 was that initial snapshot.
+
+**Day 1 merge on BROKER_DW** (`CALL CORE.SP_LOAD_DIM_ACCOUNT()`, 6.3 s round trip, 4.3 s inside the procedure):
+
+| Metric | Value |
+|---|---|
+| Rows read from RAW.STRM_ACCOUNTS | 500 |
+| Rejected | 0 |
+| Versions inserted / closed | 500 / 0 |
+| DIM_ACCOUNT rows / distinct accounts / current | 500 / 500 / 500 |
+| Accounts with more than one current row | 0 |
+| effective_from / effective_to | 2026-09-01 / 9999-12-31 for all |
+| Stream after the run | 0 rows, SYSTEM$STREAM_HAS_DATA = FALSE |
+
+Change history (closed versions) starts once days 2 and later are loaded.

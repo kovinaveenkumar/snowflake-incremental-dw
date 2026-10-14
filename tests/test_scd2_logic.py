@@ -1,6 +1,8 @@
 """SCD Type 2 rules for CORE.DIM_ACCOUNT, run against the real procedure on a small fixture.
 
 Scenario (each block is one call of CORE.SP_LOAD_DIM_ACCOUNT):
+  run 0  first read of the stream: returns only its SHOW_INITIAL_ROWS snapshot (empty here), the
+         same first read that delivered day 1 in BROKER_DW
   run 1  day 1: A1, A2, A3 new
   run 2  day 2: A1 address changed, A2 unchanged, A4 new, one row with no account_id, A5 with a bad status
   run 3  days 3+4 in one catch-up batch: A1 changes on both days (plus an exact duplicate row), A3 changes
@@ -59,6 +61,8 @@ def scenario(sf_test_db):
     cur = sf_test_db.cursor()
     runs, dims = [], []
 
+    initial = _run(cur)
+
     _load(cur, D1, [{"account_id": "A1"}, {"account_id": "A2"}, {"account_id": "A3"}])
     runs.append(_run(cur)); dims.append(_dim(cur))
 
@@ -84,7 +88,7 @@ def scenario(sf_test_db):
     runs.append(_run(cur)); dims.append(_dim(cur))
 
     runs.append(_run(cur)); dims.append(_dim(cur))
-    return {"cur": cur, "runs": runs, "dims": dims}
+    return {"cur": cur, "initial": initial, "runs": runs, "dims": dims}
 
 
 def _counts(run: dict) -> tuple:
@@ -93,6 +97,10 @@ def _counts(run: dict) -> tuple:
 
 
 # (rows_read, rows_rejected, rows_unchanged, versions_closed, versions_inserted)
+def test_run0_initial_snapshot_of_empty_table(scenario):
+    assert _counts(scenario["initial"]) == (0, 0, 0, 0, 0)
+
+
 def test_run1_new_accounts(scenario):
     assert _counts(scenario["runs"][0]) == (3, 0, 0, 0, 3)
     dim = scenario["dims"][0]
@@ -150,4 +158,4 @@ def test_rejected_rows_and_load_log(scenario):
                                ORDER BY reject_reason""").fetchall()
     assert rejected == [("A5", "INVALID_STATUS"), (None, "MISSING_ACCOUNT_ID"), ("A3", "OUT_OF_ORDER")]
     statuses = cur.execute("SELECT status, COUNT(*) FROM AUDIT.LOAD_LOG GROUP BY status").fetchall()
-    assert statuses == [("SUCCESS", 5)]
+    assert statuses == [("SUCCESS", 6)]
