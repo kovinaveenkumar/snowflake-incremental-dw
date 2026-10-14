@@ -128,3 +128,22 @@ Testing identified that `SP_LOAD_DIM_ACCOUNT` inserted into `AUDIT.LOAD_LOG` by 
 - 0 rows differ from the independent running sum of trades, 0 duplicate keys, 0 missing close prices, and the stream is empty afterwards.
 
 Positions are short-heavy because the synthetic generator lets accounts sell what they do not hold (documented in `07_fact_daily_position.sql`).
+
+## Step 8: Scheduled Task graph (2026-10-14)
+
+**Task tests** (`RUN_SNOWFLAKE_TESTS=1 pytest tests/test_tasks.py`): **3 passed** in 77 s. The real graph ran in `BROKER_DW_TEST`, all 4 tasks SUCCEEDED and every layer loaded. A second run with no new data was SKIPPED by the root's WHEN condition ("Conditional expression for task evaluated to false"), so no warehouse ran and no load happened.
+Engineering note: SKIPPED runs are not listed in `INFORMATION_SCHEMA.COMPLETE_TASK_GRAPHS`, and task names can repeat across databases, so `scripts/tasks.py run-once --wait` reads the root task's final state from `TASK_HISTORY`, filtered to the current database.
+
+**BROKER_DW:** 4 tasks created and resumed (`python -m scripts.tasks resume`): TASK_ROOT every 5 minutes, then DIM_ACCOUNT, FACT_TRADE, FACT_DAILY_POSITION. The schedule is left running.
+
+**No-manual-steps proof, day 2:** the only action was `python -m generator.upload_to_stage --date 2026-09-02` at 14:01:25 (PUT + Snowpipe notify). No procedure was called by hand. The first scheduled tick after resume, at 14:06:12, ran the graph: all 4 tasks SUCCEEDED, complete at 14:06:41 (root 4.9 s, account 7.8 s, trades 8.3 s, positions 5.5 s).
+
+| Layer | Day 2 result from the scheduled run |
+|---|---|
+| DIM_ACCOUNT (SCD2) | 9 rows read: 5 changed (5 versions closed, 5 inserted), 1 new account, 3 unchanged re-sends ignored. Totals: 506 rows, 501 current, 5 closed, 0 accounts with 2 current rows |
+| FACT_TRADE | 1,992 read, 1,985 inserted, 7 rejected (2 duplicate, 1 missing account, 2 negative quantity, 2 unknown security). Rejects match the manifest exactly |
+| Control totals | 1,985 + 7 = 1,992 rows, and notional 236,761,613.76 + (−48,630.78) = 236,712,982.98, matching the sender's control file |
+| FACT_DAILY_POSITION | Rebuilt from 2026-09-02 only (0 day 1 rows replaced), 3,899 rows inserted. Total 5,913 rows over 2 days, 0 differences from the running sum of trades |
+| Streams | All RAW streams empty afterwards |
+
+Example SCD2 history: A000059 moved from Atlanta (2026-09-01 to 2026-09-01, closed) to Boston (2026-09-02 to 9999-12-31, current).

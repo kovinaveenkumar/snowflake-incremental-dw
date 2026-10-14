@@ -68,8 +68,8 @@ def test_graph_loads_every_layer(sf_test_db):
                                    (SELECT position_quantity FROM CORE.FACT_DAILY_POSITION)""").fetchone()
     assert counts == (1, 1, 2, 1, 6)
 
-    # Nothing new: the WHEN condition is false, so the graph does not run the load again.
+    # Nothing new: the root's WHEN condition is false, so the run is SKIPPED (no warehouse, no load).
     again = run_once(cur, wait=True)
-    assert again["state"] in ("SKIPPED", "SUCCEEDED"), again
-    if again["state"] == "SUCCEEDED":  # if Snowflake ran it anyway, it must have changed nothing
-        assert cur.execute("SELECT COUNT(*) FROM CORE.FACT_TRADE").fetchone()[0] == 2
+    assert again["state"] == "SKIPPED", again
+    assert "evaluated to false" in again["first_error_message"]
+    assert cur.execute("SELECT COUNT(*) FROM CORE.FACT_TRADE").fetchone()[0] == 2

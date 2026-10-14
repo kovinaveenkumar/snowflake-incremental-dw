@@ -37,6 +37,7 @@ def graph_runs(cur, limit: int = 10) -> list[dict]:
                            first_error_task_name, first_error_message
                       FROM TABLE(INFORMATION_SCHEMA.COMPLETE_TASK_GRAPHS(
                            ROOT_TASK_NAME => '{ROOT.split('.')[-1]}', RESULT_LIMIT => {limit}))
+                     WHERE database_name = CURRENT_DATABASE()
                      ORDER BY scheduled_time DESC""")
     cols = [d[0].lower() for d in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
@@ -49,7 +50,7 @@ def task_runs(cur, run_id) -> list[dict]:
                       FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY(
                            SCHEDULED_TIME_RANGE_START => DATEADD('day', -1, CURRENT_TIMESTAMP()),
                            RESULT_LIMIT => 1000))
-                     WHERE run_id = {int(run_id)}
+                     WHERE run_id = {int(run_id)} AND database_name = CURRENT_DATABASE()
                      ORDER BY query_start_time""")
     cols = [d[0].lower() for d in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
@@ -72,12 +73,34 @@ def run_once(cur, wait: bool = True, timeout_s: int = 600) -> dict | None:
     if not wait:
         return None
     deadline = time.time() + timeout_s
+    root_run = None
     while time.time() < deadline:
         time.sleep(10)
-        runs = [r for r in graph_runs(cur, 20) if r["scheduled_time"] >= started]
-        if runs:
-            return runs[0]
+        if root_run is None:
+            root_run = _root_run_since(cur, started)
+            # A root whose WHEN condition is false is SKIPPED and never shows in COMPLETE_TASK_GRAPHS.
+            if root_run and root_run["state"] in ("SKIPPED", "FAILED", "CANCELLED"):
+                return {"run_id": root_run["run_id"], "state": root_run["state"],
+                        "scheduled_time": root_run["scheduled_time"], "first_error_task_name": None,
+                        "first_error_message": root_run["error_message"]}
+        if root_run is not None:
+            done = [r for r in graph_runs(cur, 20) if r["run_id"] == root_run["run_id"]]
+            if done:
+                return done[0]
     raise TimeoutError(f"Task graph did not finish within {timeout_s} s")
+
+
+def _root_run_since(cur, started) -> dict | None:
+    """The root task's first run scheduled at or after `started` in this database, once it has a final state."""
+    cur.execute(f"""SELECT run_id, state, scheduled_time, error_message
+                      FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY(
+                           TASK_NAME => '{ROOT.split('.')[-1]}',
+                           SCHEDULED_TIME_RANGE_START => DATEADD('hour', -1, CURRENT_TIMESTAMP())))
+                     WHERE database_name = CURRENT_DATABASE() AND scheduled_time >= %s
+                       AND state IN ('SUCCEEDED', 'SKIPPED', 'FAILED', 'CANCELLED')
+                     ORDER BY scheduled_time LIMIT 1""", (started,))
+    row = cur.fetchone()
+    return dict(zip(["run_id", "state", "scheduled_time", "error_message"], row)) if row else None
 
 
 def _print_status(cur) -> None:
