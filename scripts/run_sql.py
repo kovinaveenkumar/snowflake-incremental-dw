@@ -30,7 +30,13 @@ def main() -> None:
         print(sql)
         return
     with snowflake_connect() as conn:
-        for cur in conn.execute_string(sql, remove_comments=True):
+        execute(conn, sql, verbose=True)
+
+
+def execute(conn, sql: str, verbose: bool = False) -> None:
+    """Run every statement in an already-rendered SQL script on an open connection."""
+    for cur in conn.execute_string(sql, remove_comments=True):
+        if verbose:
             print(f"> {cur.query.strip().splitlines()[0][:100]}")
             if cur.description:
                 cols = [c[0] for c in cur.description]
