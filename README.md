@@ -1,5 +1,7 @@
 # Snowflake Incremental Data Warehouse
 
+![Snowflake Incremental Data Warehouse: daily files to Snowpipe, Streams, a scheduled Task graph, SCD Type 2 and facts, and reconciliation. 60 of 60 files reconciled to the cent, $7.3B notional matched, 806 SCD Type 2 versions, 28-day backlog loaded in 45 seconds](docs/images/cover.png)
+
 I built an incremental data warehouse for a broker's daily **account** and **trade** files. Files land in Snowflake and are loaded automatically by **Snowpipe**. **Streams** and a scheduled **Task graph** load an **SCD Type 2** account dimension, a **transaction fact** and a **daily position snapshot**. Every file is **reconciled against the sender's control totals**, bad rows go to an audit table, and a **Snowpark** check flags suspicious prices. I also rebuilt the same load in **Oracle PL/SQL** and compared the results count for count.
 
 > **All data is synthetic**: I generate it with `generator/generate_files.py` (seed 42). Every number below comes from a real run, and I recorded each one in [`docs/results.md`](docs/results.md).
