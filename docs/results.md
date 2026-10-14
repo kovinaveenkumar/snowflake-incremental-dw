@@ -213,3 +213,38 @@ A 5 % threshold has about 7x headroom over normal price noise in this data (the 
 **Reconciliation:** all 60 control files (30 accounts + 30 trades) are closed as PASS. Across the 30 trade files, sender rows 60,031 = RAW 60,031 = FACT 59,853 + rejected 178, and notional 7,316,162,275.22 = loaded + rejected, with 0 files differing on rows, quantity or notional. The reject rate per file was 0.20 % to 0.39 %. All 6 global checks PASS.
 
 **Cost so far:** 1.37 credits used on DW_WH (resource monitor), out of the 20-credit cap.
+
+## Step 11: Tuning (2026-10-14)
+
+Measured with `python -m scripts.tuning` on the real 30-day data: result cache off, warm-up run, then 3 timed runs (`QUERY_HISTORY_BY_SESSION`).
+
+**Layout baseline:** FACT_TRADE is 59,853 rows / 1.9 MB and FACT_DAILY_POSITION is 648,618 rows / 10.7 MB, and each is **1 micro-partition** (`SYSTEM$CLUSTERING_INFORMATION`). A clustering key cannot prune anything at this size, so it was **not applied**: it would only add serverless reclustering cost. The production-scale key is documented in `11_tuning.sql`.
+
+**Query rewrite** (DQ check: every position equals the running sum of its trades):
+
+| Version | Median elapsed (3 runs) | Runs | Median execution | Bytes scanned | Result |
+|---|---|---|---|---|---|
+| Before: range join + GROUP BY | 329 ms | 311 / 329 / 548 | 248 ms | 23,424,000 | 0 mismatches |
+| After: window running sum + ASOF JOIN | 338 ms | 331 / 338 / 348 | 254 ms | 12,713,472 | 0 mismatches |
+
+The two versions are equivalent: on a deliberately wrong comparison (position + 1), both flag all 648,618 rows. The rewrite scans **46 % fewer bytes**, but elapsed time shows **no measurable gain** at this size; the difference is within run-to-run noise. The deployed DQ check was left unchanged.
+
+## Step 12: Oracle PL/SQL version (2026-10-14)
+
+Oracle Database 23ai Free (23.26.3) in Docker (`gvenzl/oracle-free:23-slim-faststart`, container `broker-dw-oracle`, port 1522). `python -m oracle.run_oracle` builds `oracle/schema.sql`, compiles `oracle/pkg_load.sql`, loads the same 30 days of generated files into staging tables, and calls `pkg_load.run_day` once per day. Each call runs security load (MERGE) → SCD2 account load (MERGE closes changed versions, INSERT new ones) → trade validation and load → reconciliation, as one transaction.
+
+**Run:** 30 days in 0.9 s; the whole script, including schema build and staging load, took 7.3 s.
+
+**Oracle vs Snowflake, same input files:**
+
+| Metric | Oracle | Snowflake | Match |
+|---|---|---|---|
+| DIM_ACCOUNT versions / current / closed | 806 / 538 / 268 | 806 / 538 / 268 | yes |
+| FACT_TRADE rows | 59,853 | 59,853 | yes |
+| FACT_TRADE notional | 7,305,865,118.44 | 7,305,865,118.44 | yes |
+| Rejected trades by reason | 41 / 46 / 45 / 46 | 41 / 46 / 45 / 46 | yes |
+| Securities | 100 | 100 | yes |
+
+Oracle reconciliation: 150 checks PASS, 0 FAIL (5 checks × 30 trade files).
+
+**Error path:** `run_day` was called for a control file with no data (2999-12-31). It raised `ORA-20001: Reconciliation failed for trades_29991231.csv: 4 check(s)` (the custom exception `e_recon_failed`) and rolled the day back, leaving 0 recon rows. The `load_log` rows written by the `AUTONOMOUS_TRANSACTION` logger survived the rollback, including the FAILED entry. The demo rows were then removed.
