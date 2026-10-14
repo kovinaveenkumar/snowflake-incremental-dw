@@ -32,3 +32,20 @@ def snowflake_connect(**overrides):
     params.update(overrides)
     return snowflake.connector.connect(**params)
 
+
+
+def snowpark_session(**overrides):
+    """Snowpark Session with the same key-pair credentials as snowflake_connect()."""
+    from snowflake.snowpark import Session
+
+    params = {
+        "account": env("SNOWFLAKE_ACCOUNT"),
+        "user": env("SNOWFLAKE_USER"),
+        "private_key_file": str(Path(env("SNOWFLAKE_PRIVATE_KEY_PATH")).expanduser()),
+        "role": env("SNOWFLAKE_ROLE"),
+        "warehouse": env("SNOWFLAKE_WAREHOUSE"),
+        "database": env("SNOWFLAKE_DATABASE"),
+        "session_parameters": {"QUERY_TAG": "snowflake-incremental-dw:snowpark"},
+    }
+    params.update(overrides)
+    return Session.builder.configs(params).create()
