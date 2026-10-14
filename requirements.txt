@@ -1,0 +1,7 @@
+snowflake-connector-python
+snowflake-snowpark-python
+boto3
+pandas
+pytest
+oracledb
+python-dotenv
