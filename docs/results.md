@@ -255,3 +255,7 @@ Oracle reconciliation: 150 checks PASS, 0 FAIL (5 checks × 30 trade files).
 It also verifies a clean build in file order: a pipe is validated against its target table when it is created, so `02_raw_tables.sql` runs before `03_pipes.sql`.
 
 **UAT** (`python -m scripts.uat`, read-only against BROKER_DW, written to `docs/uat_checklist.md`): **13 of 13 PASS**. The Snowpark check was re-run on all 30 days for the checklist: 0 of 59,853 trades flagged, max deviation 0.7489 %.
+
+## Final test run (2026-10-14)
+
+`RUN_SNOWFLAKE_TESTS=1 pytest`: **62 passed** in 692 s (11 min 32 s). That is 27 offline tests (generator 17, upload paths 5, task-graph shape 2, Snowpark local testing 3) plus 35 Snowflake-backed tests (SCD2 8, trade fact 8, positions 6, data quality 5, task graph 1, Snowpark 1, end-to-end integration 6). Each Snowflake test module builds `BROKER_DW_TEST` from the project's SQL files and drops it afterwards.

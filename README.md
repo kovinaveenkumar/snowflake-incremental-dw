@@ -32,7 +32,7 @@ More detail in [`docs/architecture.md`](docs/architecture.md) and [`docs/data_mo
 | Data quality | Latest DQ run: 230 checks PASS, 0 FAIL; Snowpark price check: 0 of 59,853 trades flagged (max deviation 0.75 % vs a 5 % threshold) |
 | Oracle PL/SQL | Same files through `pkg_load`: 806 / 538 / 59,853 / $7,305,865,118.44 / 178, **identical to Snowflake**; 150 reconciliation checks PASS |
 | UAT | [`docs/uat_checklist.md`](docs/uat_checklist.md): **13 of 13 PASS** (generated from a real run) |
-| Tests | See [Testing](#testing) |
+| Tests | **62 passed** in one run (27 offline + 35 against a temporary Snowflake database), 11 min 32 s |
 | Cost | 1.59 of the 20-credit monthly cap used (X-Small warehouse, auto-suspend 60 s) |
 
 ## What I built
@@ -95,6 +95,8 @@ docker run -d --name broker-dw-oracle -p 1522:1521 -e ORACLE_RANDOM_PASSWORD=yes
 .venv/bin/pytest                          # offline tests (generator, upload paths, task graph shape, Snowpark local testing)
 RUN_SNOWFLAKE_TESTS=1 .venv/bin/pytest    # + tests against a temporary BROKER_DW_TEST database, dropped afterwards
 ```
+
+Last full run: **62 passed** (27 offline, 35 Snowflake-backed: SCD2 8, trade fact 8, positions 6, data quality 5, task graph 1, Snowpark 1, end-to-end integration 6).
 
 Issues identified and resolved through testing:
 - Load-log inserts name their columns, so schema changes in later steps cannot break earlier procedures.
