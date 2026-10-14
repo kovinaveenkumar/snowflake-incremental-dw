@@ -1,8 +1,8 @@
 # Snowflake Incremental Data Warehouse
 
-An incremental data warehouse for a broker's daily **account** and **trade** files. Files land in Snowflake and are loaded automatically by **Snowpipe**. **Streams** and a scheduled **Task graph** load an **SCD Type 2** account dimension, a **transaction fact** and a **daily position snapshot**. Every file is **reconciled against the sender's control totals**, bad rows go to an audit table, and a **Snowpark** check flags suspicious prices. The same load is rebuilt in **Oracle PL/SQL** and the results compared count for count.
+I built an incremental data warehouse for a broker's daily **account** and **trade** files. Files land in Snowflake and are loaded automatically by **Snowpipe**. **Streams** and a scheduled **Task graph** load an **SCD Type 2** account dimension, a **transaction fact** and a **daily position snapshot**. Every file is **reconciled against the sender's control totals**, bad rows go to an audit table, and a **Snowpark** check flags suspicious prices. I also rebuilt the same load in **Oracle PL/SQL** and compared the results count for count.
 
-> **All data is synthetic**, produced by `generator/generate_files.py` (seed 42). Every number below comes from a real run and is recorded in [`docs/results.md`](docs/results.md).
+> **All data is synthetic**: I generate it with `generator/generate_files.py` (seed 42). Every number below comes from a real run, and I recorded each one in [`docs/results.md`](docs/results.md).
 
 ## Architecture
 
@@ -35,7 +35,7 @@ More detail in [`docs/architecture.md`](docs/architecture.md) and [`docs/data_mo
 | Tests | See [Testing](#testing) |
 | Cost | 1.59 of the 20-credit monthly cap used (X-Small warehouse, auto-suspend 60 s) |
 
-## What it shows
+## What I built
 
 - **Snowpipe via REST** on an internal stage, with key-pair (JWT) auth. Re-sending a file does not load it twice.
 - **Streams + Tasks.** A 5-task graph is gated on `SYSTEM$STREAM_HAS_DATA`, so idle runs are SKIPPED without starting the warehouse. Runs never overlap, failed runs retry, and a task suspends itself after 3 failures.

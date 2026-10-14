@@ -1,6 +1,6 @@
 # Results
 
-Every number here comes from an actual run. All data is synthetic.
+I recorded every number here from an actual run, in the order I built the project. All data is synthetic.
 
 ## Step 1: Data generator (2026-10-14)
 
@@ -28,7 +28,7 @@ Account: Snowflake trial, AWS us-east-2, Snowflake 10.36.101. Ran `00_setup.sql`
 
 | Object | Verified state |
 |---|---|
-| Role `DW_ROLE` | Created, granted to the user and to SYSADMIN; owns `BROKER_DW`; has EXECUTE TASK |
+| Role `DW_ROLE` | Created, granted to my Snowflake user and to SYSADMIN; owns `BROKER_DW`; has EXECUTE TASK |
 | Warehouse `DW_WH` | X-Small, SUSPENDED, auto-suspend 60 s, resource monitor `DW_MONITOR` |
 | Resource monitor `DW_MONITOR` | 20 credits/month, suspend at 100%; 0.00 credits used |
 | Database `BROKER_DW` | Schemas AUDIT, CORE, MART, RAW, STAGE |
