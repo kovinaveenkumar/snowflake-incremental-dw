@@ -203,9 +203,10 @@ BEGIN
     FROM CORE.TMP_ACCOUNT_VERSIONS;
   n_inserted := SQLROWCOUNT;
 
-  INSERT INTO AUDIT.LOAD_LOG
+  INSERT INTO AUDIT.LOAD_LOG (load_run_id, procedure_name, started_at, finished_at, status, rows_read,
+                              rows_rejected, rows_unchanged, versions_closed, versions_inserted)
   VALUES (:run_id, 'CORE.SP_LOAD_DIM_ACCOUNT', :started, CURRENT_TIMESTAMP(), 'SUCCESS',
-          :n_read, :n_rejected, :n_valid - :n_changes, :n_closed, :n_inserted, NULL);
+          :n_read, :n_rejected, :n_valid - :n_changes, :n_closed, :n_inserted);
 
   COMMIT;
 

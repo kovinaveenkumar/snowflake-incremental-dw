@@ -88,3 +88,22 @@ Engineering note: with `SHOW_INITIAL_ROWS = TRUE`, the first consuming read retu
 | Stream after the run | 0 rows, SYSTEM$STREAM_HAS_DATA = FALSE |
 
 Change history (closed versions) starts once days 2 and later are loaded.
+
+## Step 6: DIM_SECURITY and FACT_TRADE (2026-10-14)
+
+**Snowflake-backed tests** (SCD2 + fact, temporary `BROKER_DW_TEST`): **16 passed** in 131 s.
+Testing identified that `SP_LOAD_DIM_ACCOUNT` inserted into `AUDIT.LOAD_LOG` by column position, which breaks when Step 6 adds the `rows_inserted`/`rows_updated` columns. The insert now names its columns and was redeployed before Step 6 (DIM_ACCOUNT data unchanged, 500 rows).
+
+**Day 1 load on BROKER_DW**, in Task-tree order:
+
+| Procedure | Time | Result |
+|---|---|---|
+| SP_LOAD_DIM_SECURITY | 4.9 s | 100 read, 100 inserted, 0 updated, 0 rejected |
+| SP_LOAD_DIM_ACCOUNT | 4.8 s | 0 read (already loaded in Step 5) |
+| SP_LOAD_FACT_TRADE | 6.6 s | 2,068 read, 2,060 inserted, 8 rejected |
+
+**Checks:**
+- Rejected trades match the generator's manifest exactly, by trade_id and reason: 2 MISSING_ACCOUNT_ID, 2 NEGATIVE_QUANTITY, 2 UNKNOWN_SECURITY, 2 DUPLICATE_TRADE_ID.
+- Control totals reconcile: fact + rejected = 2,060 + 8 = 2,068 rows; quantity 1,021,133 + 1,736 = 1,022,869; notional 252,945,194.31 + 524,562.25 = 253,469,756.56. All three match the sender's control file.
+- Trade IDs in FACT_TRADE are unique. There are 0 orphan keys, and 0 trades are linked to a non-active account version or to a version outside its date range.
+- By side: BUY 1,018 trades (signed notional +124,553,716.87), SELL 1,042 trades (−128,391,477.44).
