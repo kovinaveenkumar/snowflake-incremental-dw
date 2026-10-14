@@ -8,55 +8,23 @@ Each "day" runs the procedures in Task-tree order: SP_LOAD_DIM_SECURITY -> SP_LO
   day 3  nothing new
 """
 
-import json
 from datetime import date
 from decimal import Decimal
 
 import pytest
 
+from tests.sf_data import accounts as _accounts, run_procs, securities as _securities, trade, trades as _trades
+
 pytestmark = pytest.mark.snowflake
 
 SQL_FILES = ["03_raw_tables.sql", "04_streams.sql", "05_dim_account_scd2.sql", "06_fact_trade.sql"]
+FACT_PROCS = ("SP_LOAD_DIM_SECURITY", "SP_LOAD_DIM_ACCOUNT", "SP_LOAD_FACT_TRADE")
 
 D1, D2 = date(2026, 9, 1), date(2026, 9, 2)
-ACCOUNT = {"account_name": "Test Holder", "account_type": "INDIVIDUAL", "address_line": "1 Main St", "city": "Boston",
-           "state": "MA", "postal_code": "02101", "risk_tier": "LOW", "status": "ACTIVE", "open_date": "2020-01-01"}
-SECURITY = {"symbol": "TST", "security_name": "Test Corp", "asset_class": "EQUITY", "currency": "USD"}
-
-
-def _insert(cur, table: str, file_name: str, rows: list[dict]) -> None:
-    cols = list(rows[0]) + ["_file_name", "_file_row_number"]
-    values = [tuple(list(r.values()) + [file_name, i]) for i, r in enumerate(rows, start=1)]
-    cur.executemany(f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))})", values)
-
-
-def _accounts(cur, d: date, rows: list[dict]) -> None:
-    _insert(cur, "RAW.ACCOUNTS", f"accounts/accounts_{d:%Y%m%d}.csv.gz",
-            [{**ACCOUNT, **r, "file_date": d.isoformat()} for r in rows])
-
-
-def _securities(cur, rows: list[dict]) -> None:
-    _insert(cur, "RAW.SECURITIES", "reference/securities.csv.gz", [{**SECURITY, **r} for r in rows])
-
-
-def trade(trade_id, account_id, security_id, d: date, side="BUY", quantity=10, price="100.00", notional=None):
-    notional = notional if notional is not None else f"{Decimal(price) * quantity:.2f}"
-    return {"trade_id": trade_id, "trade_date": d.isoformat(), "trade_ts": f"{d} 10:00:00",
-            "settlement_date": date(d.year, d.month, d.day + 1).isoformat(), "account_id": account_id,
-            "security_id": security_id, "side": side, "quantity": str(quantity), "price": price,
-            "notional": notional}
-
-
-def _trades(cur, file_date: date, rows: list[dict]) -> None:
-    _insert(cur, "RAW.TRADES", f"trades/trades_{file_date:%Y%m%d}.csv.gz",
-            [{**r, "file_date": file_date.isoformat()} for r in rows])
 
 
 def _run_all(cur) -> dict:
-    out = {}
-    for name in ("SP_LOAD_DIM_SECURITY", "SP_LOAD_DIM_ACCOUNT", "SP_LOAD_FACT_TRADE"):
-        out[name] = json.loads(cur.execute(f"CALL CORE.{name}()").fetchone()[0])
-    return out
+    return run_procs(cur, FACT_PROCS)
 
 
 @pytest.fixture(scope="module")
