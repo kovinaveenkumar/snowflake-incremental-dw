@@ -107,3 +107,24 @@ Testing identified that `SP_LOAD_DIM_ACCOUNT` inserted into `AUDIT.LOAD_LOG` by 
 - Control totals reconcile: fact + rejected = 2,060 + 8 = 2,068 rows; quantity 1,021,133 + 1,736 = 1,022,869; notional 252,945,194.31 + 524,562.25 = 253,469,756.56. All three match the sender's control file.
 - Trade IDs in FACT_TRADE are unique. There are 0 orphan keys, and 0 trades are linked to a non-active account version or to a version outside its date range.
 - By side: BUY 1,018 trades (signed notional +124,553,716.87), SELL 1,042 trades (−128,391,477.44).
+
+## Step 7: FACT_DAILY_POSITION snapshot (2026-10-14)
+
+**Full test suite** (`RUN_SNOWFLAKE_TESTS=1 pytest`): **44 passed** in 268 s. That is 22 offline tests plus 22 Snowflake-backed (8 SCD2, 8 trade fact, 6 position snapshot). The position tests passed on the first run. They cover the close price from the last trade by time, short positions, a position closed to zero, carry-forward with no trades, the account version on the snapshot date, a late trade that rebuilds from its date, an empty run, and an independent running-sum check.
+
+**Day 1 snapshot on BROKER_DW** (`CALL CORE.SP_LOAD_FACT_DAILY_POSITION()`, 4.9 s). The new stream `CORE.STRM_FACT_TRADE` delivered all 2,060 day 1 trades on its first read:
+
+| Metric | Value |
+|---|---|
+| Snapshot rows (account x security) for 2026-09-01 | 2,014 |
+| Accounts / securities with a position | 494 / 100 |
+| Long / short / flat rows | 998 / 1,016 / 0 |
+| Gross long / short market value | 122,146,020.87 / −125,970,094.66 |
+
+**Checks against FACT_TRADE:**
+- Trade count: 2,060 in the snapshot = 2,060 in the fact.
+- Net quantity: −10,403 = −10,403.
+- Net notional: −3,837,760.57 = −3,837,760.57.
+- 0 rows differ from the independent running sum of trades, 0 duplicate keys, 0 missing close prices, and the stream is empty afterwards.
+
+Positions are short-heavy because the synthetic generator lets accounts sell what they do not hold (documented in `07_fact_daily_position.sql`).
