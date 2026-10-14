@@ -147,3 +147,21 @@ Engineering note: SKIPPED runs are not listed in `INFORMATION_SCHEMA.COMPLETE_TA
 | Streams | All RAW streams empty afterwards |
 
 Example SCD2 history: A000059 moved from Atlanta (2026-09-01 to 2026-09-01, closed) to Boston (2026-09-02 to 9999-12-31, current).
+
+## Step 9: Reconciliation, control totals and DQ checks (2026-10-14)
+
+**Tests:** `tests/test_data_quality.py` **5 passed** (181 s).
+The DQ tests cover exact reconciliation with a reject-rate WARN, a sender control total $1.00 off (raises an error, results kept, file marked FAIL, LOAD_LOG `DQ_FAILED`), a control file arriving before its data (PENDING), data landed but not loaded (PENDING), then PASS, closed files not re-checked, and a deliberately corrupted DIM_ACCOUNT failing 2 global checks.
+
+**Deployed to BROKER_DW:** schedule suspended, `08_tasks.sql` re-run (root now also wakes on `RAW.STRM_CONTROL_TOTALS`), `09_data_quality.sql` run, schedule resumed. The graph now has 5 tasks: ROOT → DIM_ACCOUNT → FACT_TRADE → FACT_DAILY_POSITION → RUN_DQ_CHECKS.
+
+**Days 1 and 2 reconciled.** `CALL AUDIT.SP_RUN_DQ_CHECKS()` was run twice, because the control stream's first read returns only its initial snapshot (day 1) and day 2 arrives on the second read. Each run took 5-6 s and gave 14 PASS, 0 FAIL, 0 WARN, 0 PENDING.
+
+| File | Sender control | RAW | FACT + rejected | Result |
+|---|---|---|---|---|
+| trades_20260901.csv | 2,068 rows / 1,022,869 qty / 253,469,756.56 | same | 2,060 + 8 rows / 1,021,133 + 1,736 / 252,945,194.31 + 524,562.25 | 7 checks PASS, reject rate 0.39 % |
+| trades_20260902.csv | 1,992 / 980,965 / 236,712,982.98 | same | 1,985 + 7 / 980,800 + 165 / 236,761,613.76 + (−48,630.78) | 7 checks PASS, reject rate 0.35 % |
+| accounts_20260901.csv | 500 rows | 500 | n/a | PASS |
+| accounts_20260902.csv | 9 rows | 9 | n/a | PASS |
+
+All 6 global checks passed on both runs: one current version per account, contiguous ranges, unique trade_id, no orphans, account version in force at trade date, positions equal to the running sum of trades. AUDIT.CONTROL_REGISTER shows all 4 files closed as PASS.

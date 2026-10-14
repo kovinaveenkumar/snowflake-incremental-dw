@@ -86,7 +86,7 @@ def test_day2_control_mismatch_fails_loudly_and_keeps_evidence(cur, day1):
     assert checks["RAW_VS_CORE_ROWS"] == checks["FILE_VS_RAW_ROWS"] == "PASS"
     detail = cur.execute("""SELECT details FROM AUDIT.DQ_RESULTS WHERE run_id = %s
                              AND check_name = 'FILE_VS_RAW_NOTIONAL'""", (run_id,)).fetchone()[0]
-    assert detail == "difference -1.0000"
+    assert detail == "difference -1.00"
     assert _register(cur)["trades_20260902.csv"] == "FAIL"
     assert cur.execute("SELECT status FROM AUDIT.LOAD_LOG WHERE load_run_id = %s", (run_id,)).fetchone()[0] == "DQ_FAILED"
 
