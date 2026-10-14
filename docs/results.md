@@ -21,3 +21,17 @@ Command: `python generator/generate_files.py --out data/raw` (seed 42, 500 accou
 | Files written | 92 (30 accounts + 30 trades + 30 control + securities.csv + manifest.json), 6.7 MB |
 
 Unit tests: `pytest tests/test_generator.py` → **17 passed** in 0.45 s.
+
+## Step 2: Snowflake setup (2026-10-14)
+
+Account: Snowflake trial, AWS us-east-2, Snowflake 10.36.101. Ran `00_setup.sql` (as ACCOUNTADMIN), `01_stage.sql`, `03_raw_tables.sql` (as DW_ROLE) with `python -m scripts.run_sql`. Every statement succeeded.
+
+| Object | Verified state |
+|---|---|
+| Role `DW_ROLE` | Created, granted to the user and to SYSADMIN; owns `BROKER_DW`; has EXECUTE TASK |
+| Warehouse `DW_WH` | X-Small, SUSPENDED, auto-suspend 60 s, resource monitor `DW_MONITOR` |
+| Resource monitor `DW_MONITOR` | 20 credits/month, suspend at 100%; 0.00 credits used |
+| Database `BROKER_DW` | Schemas AUDIT, CORE, MART, RAW, STAGE |
+| File format `RAW.FF_CSV` | CSV, header skipped, empty field as NULL |
+| Stage `RAW.LANDING` | Internal, server-side encrypted (SNOWFLAKE_SSE), directory table enabled |
+| RAW tables | ACCOUNTS, TRADES, CONTROL_TOTALS, SECURITIES (business columns VARCHAR + load metadata) |
