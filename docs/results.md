@@ -35,3 +35,22 @@ Account: Snowflake trial, AWS us-east-2, Snowflake 10.36.101. Ran `00_setup.sql`
 | File format `RAW.FF_CSV` | CSV, header skipped, empty field as NULL |
 | Stage `RAW.LANDING` | Internal, server-side encrypted (SNOWFLAKE_SSE), directory table enabled |
 | RAW tables | ACCOUNTS, TRADES, CONTROL_TOTALS, SECURITIES (business columns VARCHAR + load metadata) |
+
+## Step 3: Snowpipe load of day 1 (2026-10-14)
+
+Created `RAW.PIPE_ACCOUNTS`, `RAW.PIPE_TRADES`, `RAW.PIPE_CONTROL_TOTALS`, `RAW.PIPE_SECURITIES` (`02_pipes.sql`).
+Ran `python -m generator.upload_to_stage --date 2026-09-01 --reference --wait`: 4 files PUT to `@RAW.LANDING` (gzip), 4 `insertFiles` REST calls returned `SUCCESS`.
+
+Load history (from `INFORMATION_SCHEMA.COPY_HISTORY`):
+
+| File | Table | Status | Rows | Errors | Received to loaded |
+|---|---|---|---|---|---|
+| reference/securities.csv.gz | RAW.SECURITIES | Loaded | 100 | 0 | 22.1 s |
+| accounts/accounts_20260901.csv.gz | RAW.ACCOUNTS | Loaded | 500 | 0 | 24.5 s |
+| trades/trades_20260901.csv.gz | RAW.TRADES | Loaded | 2,068 | 0 | 19.6 s |
+| control/control_20260901.csv.gz | RAW.CONTROL_TOTALS | Loaded | 2 | 0 | 24.7 s |
+
+Reconciliation, files vs RAW: all 4 row counts match. Trade control totals match the sender's control file exactly (2,068 rows, quantity 1,022,869, notional 253,469,756.56).
+All 8 injected bad rows for the day are present in RAW, as intended (2 missing account_id, 2 negative quantity, 2 unknown security, 2 duplicate trade_id); they are rejected downstream, not at load.
+
+Idempotency: re-running the same upload, PUT reported `SKIPPED` for all 4 files and the pipes loaded nothing new (row counts unchanged after 45 s; `SYSTEM$PIPE_STATUS` pendingFileCount 0).
