@@ -54,3 +54,16 @@ Reconciliation, files vs RAW: all 4 row counts match. Trade control totals match
 All 8 injected bad rows for the day are present in RAW, as intended (2 missing account_id, 2 negative quantity, 2 unknown security, 2 duplicate trade_id); they are rejected downstream, not at load.
 
 Idempotency: re-running the same upload, PUT reported `SKIPPED` for all 4 files and the pipes loaded nothing new (row counts unchanged after 45 s; `SYSTEM$PIPE_STATUS` pendingFileCount 0).
+
+## Step 4: Streams (2026-10-14)
+
+Created 4 APPEND_ONLY streams with SHOW_INITIAL_ROWS = TRUE (`04_streams.sql`). Verified by reading them without consuming:
+
+| Stream | Stream rows | Table rows | Inserts | Updates | Has data |
+|---|---|---|---|---|---|
+| RAW.STRM_SECURITIES | 100 | 100 | 100 | 0 | TRUE |
+| RAW.STRM_ACCOUNTS | 500 | 500 | 500 | 0 | TRUE |
+| RAW.STRM_TRADES | 2,068 | 2,068 | 2,068 | 0 | TRUE |
+| RAW.STRM_CONTROL_TOTALS | 2 | 2 | 2 | 0 | TRUE |
+
+The day 1 rows loaded before the streams existed are all visible, because of SHOW_INITIAL_ROWS. A second SELECT on STRM_TRADES still returned 2,068, which confirms that reading does not advance the offset. All streams are `stale = false`, and stale_after is 2026-10-28 (14 days out) unless they are consumed earlier.
