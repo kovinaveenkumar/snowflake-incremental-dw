@@ -1,6 +1,6 @@
 snowflake-connector-python
 snowflake-snowpark-python
-boto3
+snowflake-ingest
 pandas
 pytest
 oracledb

@@ -1,4 +1,4 @@
-"""Snowflake and AWS connections built from .env (credentials never live in code)."""
+"""Snowflake connections built from .env (credentials never live in code)."""
 
 from __future__ import annotations
 
@@ -32,8 +32,3 @@ def snowflake_connect(**overrides):
     params.update(overrides)
     return snowflake.connector.connect(**params)
 
-
-def aws_session():
-    import boto3
-
-    return boto3.Session(profile_name=env("AWS_PROFILE"), region_name=env("AWS_REGION"))

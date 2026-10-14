@@ -1,0 +1,2 @@
+-- Step 3: one Snowpipe per feed on RAW.LANDING, triggered through the Snowpipe REST API (insertFiles).
+-- (Written in Step 3.)
