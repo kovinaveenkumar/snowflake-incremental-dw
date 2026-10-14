@@ -1,4 +1,4 @@
--- Step 2: RAW tables. Every business column is VARCHAR so a bad value never fails the load;
+-- Step 2: RAW tables (created before 03_pipes.sql, which loads into them). Every business column is VARCHAR so a bad value never fails the load;
 -- typing and validation happen downstream, and failures go to AUDIT.REJECTED_ROWS.
 
 USE ROLE DW_ROLE;

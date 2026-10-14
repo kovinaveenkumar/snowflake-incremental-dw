@@ -19,7 +19,7 @@ from tests.sf_data import accounts, controls, run_dq, run_procs, securities, tra
 
 pytestmark = pytest.mark.snowflake
 
-SQL_FILES = ["03_raw_tables.sql", "04_streams.sql", "05_dim_account_scd2.sql", "06_fact_trade.sql",
+SQL_FILES = ["02_raw_tables.sql", "04_streams.sql", "05_dim_account_scd2.sql", "06_fact_trade.sql",
              "07_fact_daily_position.sql", "08_tasks.sql", "09_data_quality.sql"]
 D1, D2, D3 = (date(2026, 9, d) for d in (1, 2, 3))
 TRADE_CHECKS = {"FILE_VS_RAW_ROWS", "FILE_VS_RAW_QUANTITY", "FILE_VS_RAW_NOTIONAL", "RAW_VS_CORE_ROWS",

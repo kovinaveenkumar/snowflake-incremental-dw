@@ -17,7 +17,7 @@ from tests.sf_data import accounts as _accounts, run_procs, securities as _secur
 
 pytestmark = pytest.mark.snowflake
 
-SQL_FILES = ["03_raw_tables.sql", "04_streams.sql", "05_dim_account_scd2.sql", "06_fact_trade.sql"]
+SQL_FILES = ["02_raw_tables.sql", "04_streams.sql", "05_dim_account_scd2.sql", "06_fact_trade.sql"]
 FACT_PROCS = ("SP_LOAD_DIM_SECURITY", "SP_LOAD_DIM_ACCOUNT", "SP_LOAD_FACT_TRADE")
 
 D1, D2 = date(2026, 9, 1), date(2026, 9, 2)

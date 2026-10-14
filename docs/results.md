@@ -24,7 +24,7 @@ Unit tests: `pytest tests/test_generator.py` → **17 passed** in 0.45 s.
 
 ## Step 2: Snowflake setup (2026-10-14)
 
-Account: Snowflake trial, AWS us-east-2, Snowflake 10.36.101. Ran `00_setup.sql` (as ACCOUNTADMIN), `01_stage.sql`, `03_raw_tables.sql` (as DW_ROLE) with `python -m scripts.run_sql`. Every statement succeeded.
+Account: Snowflake trial, AWS us-east-2, Snowflake 10.36.101. Ran `00_setup.sql` (as ACCOUNTADMIN), `01_stage.sql`, `02_raw_tables.sql` (as DW_ROLE) with `python -m scripts.run_sql`. Every statement succeeded.
 
 | Object | Verified state |
 |---|---|
@@ -38,7 +38,7 @@ Account: Snowflake trial, AWS us-east-2, Snowflake 10.36.101. Ran `00_setup.sql`
 
 ## Step 3: Snowpipe load of day 1 (2026-10-14)
 
-Created `RAW.PIPE_ACCOUNTS`, `RAW.PIPE_TRADES`, `RAW.PIPE_CONTROL_TOTALS`, `RAW.PIPE_SECURITIES` (`02_pipes.sql`).
+Created `RAW.PIPE_ACCOUNTS`, `RAW.PIPE_TRADES`, `RAW.PIPE_CONTROL_TOTALS`, `RAW.PIPE_SECURITIES` (`03_pipes.sql`).
 Ran `python -m generator.upload_to_stage --date 2026-09-01 --reference --wait`: 4 files PUT to `@RAW.LANDING` (gzip), 4 `insertFiles` REST calls returned `SUCCESS`.
 
 Load history (from `INFORMATION_SCHEMA.COPY_HISTORY`):
@@ -248,3 +248,10 @@ Oracle Database 23ai Free (23.26.3) in Docker (`gvenzl/oracle-free:23-slim-fasts
 Oracle reconciliation: 150 checks PASS, 0 FAIL (5 checks × 30 trade files).
 
 **Error path:** `run_day` was called for a control file with no data (2999-12-31). It raised `ORA-20001: Reconciliation failed for trades_29991231.csv: 4 check(s)` (the custom exception `e_recon_failed`) and rolled the day back, leaving 0 recon rows. The `load_log` rows written by the `AUTONOMOUS_TRANSACTION` logger survived the rollback, including the FAILED entry. The demo rows were then removed.
+
+## Step 13: Integration test and UAT (2026-10-14)
+
+**Integration test** (`RUN_SNOWFLAKE_TESTS=1 pytest tests/test_integration.py`): **6 passed** in 149 s. Nothing is mocked: it generates files (40 accounts, 3 days), PUTs them to the stage, notifies Snowpipe via REST, waits for COPY_HISTORY (10 files Loaded, 0 errors), runs the real 5-task graph once (all SUCCEEDED), and asserts every layer against the manifest and an SCD2 replay (rows, rejects by id and reason, versions, current flags, 6 control files PASS, DQ 0 fail, positions for 3 days).
+It also verifies a clean build in file order: a pipe is validated against its target table when it is created, so `02_raw_tables.sql` runs before `03_pipes.sql`.
+
+**UAT** (`python -m scripts.uat`, read-only against BROKER_DW, written to `docs/uat_checklist.md`): **13 of 13 PASS**. The Snowpark check was re-run on all 30 days for the checklist: 0 of 59,853 trades flagged, max deviation 0.7489 %.

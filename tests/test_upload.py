@@ -9,12 +9,12 @@ import pytest
 from generator.generate_files import GeneratorConfig, generate, write_files
 from generator.upload_to_stage import DAILY_FEEDS, REFERENCE_FEED, files_for
 
-PIPES_SQL = Path(__file__).resolve().parents[1] / "snowflake" / "02_pipes.sql"
+PIPES_SQL = Path(__file__).resolve().parents[1] / "snowflake" / "03_pipes.sql"
 DAY = date(2026, 9, 1)
 
 
 def _pipe_patterns() -> dict[str, str]:
-    """pipe name -> PATTERN regex, read from 02_pipes.sql."""
+    """pipe name -> PATTERN regex, read from 03_pipes.sql."""
     sql = PIPES_SQL.read_text()
     pipes = re.findall(r"CREATE PIPE IF NOT EXISTS (RAW\.\w+).*?PATTERN = '([^']+)'", sql, flags=re.S)
     return dict(pipes)

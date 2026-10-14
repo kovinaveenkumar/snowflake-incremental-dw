@@ -98,5 +98,5 @@ def test_run_writes_outliers_and_dq_result(sf_test_db):
     assert dq == [("SNOWPARK_PRICE_OUTLIERS", "GLOBAL", Decimal("1.0000"), "WARN")]
 
 
-SQL_FILES = ["03_raw_tables.sql", "04_streams.sql", "05_dim_account_scd2.sql", "06_fact_trade.sql",
+SQL_FILES = ["02_raw_tables.sql", "04_streams.sql", "05_dim_account_scd2.sql", "06_fact_trade.sql",
              "07_fact_daily_position.sql", "08_tasks.sql", "09_data_quality.sql", "10_snowpark_dq.sql"]

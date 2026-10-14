@@ -16,7 +16,7 @@ import pytest
 
 pytestmark = pytest.mark.snowflake
 
-SQL_FILES = ["03_raw_tables.sql", "04_streams.sql", "05_dim_account_scd2.sql"]
+SQL_FILES = ["02_raw_tables.sql", "04_streams.sql", "05_dim_account_scd2.sql"]
 
 D1, D2, D3, D4 = (date(2026, 9, d) for d in (1, 2, 3, 4))
 OPEN = date(9999, 12, 31)

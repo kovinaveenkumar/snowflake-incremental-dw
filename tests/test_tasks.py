@@ -12,7 +12,7 @@ import pytest
 
 from tests.sf_data import LOAD_ORDER, accounts, run_dq, run_procs, securities, trade, trades
 
-SQL_FILES = ["03_raw_tables.sql", "04_streams.sql", "05_dim_account_scd2.sql", "06_fact_trade.sql",
+SQL_FILES = ["02_raw_tables.sql", "04_streams.sql", "05_dim_account_scd2.sql", "06_fact_trade.sql",
              "07_fact_daily_position.sql", "08_tasks.sql", "09_data_quality.sql"]
 SQL_DIR = Path(__file__).resolve().parents[1] / "snowflake"
 TASKS_SQL = (SQL_DIR / "08_tasks.sql").read_text() + (SQL_DIR / "09_data_quality.sql").read_text()
